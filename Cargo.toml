@@ -1,0 +1,8 @@
+[package]
+name = "bruh_os"
+version = "0.1.0"
+authors = ["safinsingh <safin.singh@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+stivale = { git = "https://github.com/safinsingh/stivale-rs" }
