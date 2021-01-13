@@ -7,3 +7,6 @@ deps:
 - rustup + cargo
 - gcc
 - git
+- python3
+- mkfs
+- make

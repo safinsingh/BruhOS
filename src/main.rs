@@ -1,5 +1,9 @@
 #![no_std]
 #![no_main]
+#![feature(asm)]
+#![warn(clippy::all)]
+
+mod arch;
 
 use core::panic::PanicInfo;
 use stivale::StivaleHeader;
@@ -32,5 +36,7 @@ pub extern "C" fn kmain(stivale_struct_ptr: usize) -> ! {
 		}
 	}
 
-	loop {}
+	loop {
+		arch::cpu::wait_for_interrupt();
+	}
 }

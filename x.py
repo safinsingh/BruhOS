@@ -15,11 +15,13 @@ def vprint(message):
 
 
 def clean():
-    _("rm -rf build/*")
+    _("rm -f build/*")
+    _("rm -rf isotmp/")
+    _("rm -f loopback_dev")
 
 
 def build():
-    _('RUSTFLAGS="-C link-arg=-Ttools/linker.ld" cargo build')
+    _('RUSTFLAGS="-C link-arg=-Tsrc/linker.ld" cargo build')
     _("cp target/x86_64-bruh_os/debug/bruh_os build/kernel.elf")
 
 
@@ -34,12 +36,10 @@ def hdd():
     _("sudo mount $(cat loopback_dev)p1 isotmp/")
     _("sudo mount build/bruhos.img isotmp/")
     _("sudo cp -Rf build/kernel.elf isotmp/")
-    _("sudo cp -Rf tools/limine.cfg isotmp/")
+    _("sudo cp -Rf run/limine.cfg isotmp/")
     _("sync")
     _("sudo umount isotmp/")
     _("sudo losetup -d $(cat loopback_dev)")
-    _("rm -rf isotmp/")
-    _("rm -f loopback_dev")
     _("./lib/limine/limine-install build/bruhos.img")
 
 

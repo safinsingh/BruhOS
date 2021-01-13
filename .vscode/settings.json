@@ -1,4 +1,6 @@
 {
 	"python.formatting.provider": "black",
-	"editor.formatOnSave": true
+	"editor.formatOnSave": true,
+	"rust-analyzer.cargo.target": "run/x86_64-bruh_os.json",
+	"rust-analyzer.checkOnSave.allTargets": false
 }
