@@ -54,6 +54,7 @@ def all():
     build()
     hdd()
     run()
+    clean()
 
 
 def help():
