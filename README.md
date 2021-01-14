@@ -19,6 +19,7 @@ a basic x86_64 kernel in the works.
 - mkfs
 - make
 - parted
+- psf2bsd (to build font)
 
 ## build
 

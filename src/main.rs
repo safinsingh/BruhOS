@@ -35,7 +35,7 @@ pub fn kmain(stivale_struct_ptr: usize) -> ! {
 	let stivale_struct = unsafe { stivale::load(stivale_struct_ptr) };
 
 	let mut w = FramebufferWriter::new(stivale_struct.framebuffer().unwrap());
-	kprint!(w, "Hello World");
+	kprint!(w, "say hello to custom font!");
 
 	loop {
 		cpu::wait_for_interrupt();

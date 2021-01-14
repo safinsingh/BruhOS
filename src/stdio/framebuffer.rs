@@ -1,6 +1,6 @@
 use core::fmt::{self, Write};
-use linux_console_font::FONT;
 use stivale::framebuffer::FramebufferTag;
+use zap_font::FONT;
 
 pub struct FramebufferWriter {
 	ptr: usize,
@@ -39,7 +39,7 @@ impl FramebufferWriter {
 					unsafe {
 						*((self.ptr
 							+ (cur_x * (self.bpp / 8) + cur_y * self.pitch)
-								as usize) as *mut u32) = 0xFF0000
+								as usize) as *mut u32) = 0x00FFFF // cyan
 					}
 				}
 			}
