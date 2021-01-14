@@ -4,8 +4,7 @@ a basic x86_64 kernel in the works.
 
 ## cool stuff
 - written in rust
-- boots with limine (stivale2)
-  - boot partition uses ext2
+- boots with any stivale2-compliant bootloader
 
 ## deps
 

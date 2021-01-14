@@ -10,8 +10,14 @@ checksum = "cf1de2fe8c75bc145a2f577add951f8134889b4795d47466a54a5c846d691693"
 name = "bruh_os"
 version = "0.1.0"
 dependencies = [
+ "linux_console_font",
  "stivale",
 ]
+
+[[package]]
+name = "linux_console_font"
+version = "0.1.0"
+source = "git+https://github.com/safinsingh/linux_console_font#090ae222f18a8b73d725122577778331757694c8"
 
 [[package]]
 name = "stivale"

@@ -1,17 +1,20 @@
 #![no_std]
 #![no_main]
 #![feature(asm)]
+#![feature(const_panic)]
 #![warn(clippy::all)]
 
 mod arch;
+mod stdio;
 
 use arch::cpu;
 use core::panic::PanicInfo;
+use stdio::framebuffer::FramebufferWriter;
 use stivale::{HeaderFramebufferTag, StivaleHeader};
 
 static STACK: [u8; 4096] = [0; 4096];
 static FRAMEBUFFER_TAG: HeaderFramebufferTag =
-	HeaderFramebufferTag::new().bpp(24);
+	HeaderFramebufferTag::new().bpp(32);
 
 #[link_section = ".stivale2hdr"]
 #[used]
@@ -31,10 +34,8 @@ pub fn kmain(stivale_struct_ptr: usize) -> ! {
 	// UB otherwise.
 	let stivale_struct = unsafe { stivale::load(stivale_struct_ptr) };
 
-	let framebuffer = stivale_struct.framebuffer().unwrap();
-	for i in 0..framebuffer.size() {
-		unsafe { *((framebuffer.start_address() + i) as *mut u8) = 0xA0 }
-	}
+	let mut w = FramebufferWriter::new(stivale_struct.framebuffer().unwrap());
+	kprint!(w, "Hello World");
 
 	loop {
 		cpu::wait_for_interrupt();
