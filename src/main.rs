@@ -5,6 +5,7 @@
 
 mod arch;
 
+use arch::cpu;
 use core::panic::PanicInfo;
 use stivale::{HeaderFramebufferTag, StivaleHeader};
 
@@ -20,13 +21,13 @@ static STIVALE_HDR: StivaleHeader = StivaleHeader::new(STACK[0] as *const u8)
 #[panic_handler]
 fn panic(_info: &PanicInfo) -> ! {
 	loop {
-		arch::cpu::wait_for_interrupt();
+		cpu::wait_for_interrupt();
 	}
 }
 
 #[no_mangle]
 pub fn kmain(stivale_struct_ptr: usize) -> ! {
-	// SAFETY: valid when a stivale2-compliant bootloader is in use. May cause
+	// SAFETY: valid when a stivale2-compliant bootloader is in use. WILL cause
 	// UB otherwise.
 	let stivale_struct = unsafe { stivale::load(stivale_struct_ptr) };
 
@@ -36,6 +37,6 @@ pub fn kmain(stivale_struct_ptr: usize) -> ! {
 	}
 
 	loop {
-		arch::cpu::wait_for_interrupt();
+		cpu::wait_for_interrupt();
 	}
 }
