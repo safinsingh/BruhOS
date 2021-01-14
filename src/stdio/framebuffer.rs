@@ -23,7 +23,7 @@ impl FramebufferWriter {
 
 	pub fn draw(&mut self, c: char) {
 		if c as u8 == b'\n' {
-			self.row += (self.bpp / 8) * 2;
+			self.row += (self.bpp / 8) * 4;
 			self.col = 0;
 			return;
 		}
