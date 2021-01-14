@@ -23,7 +23,7 @@ impl FramebufferWriter {
 
 	pub fn draw(&mut self, c: char) {
 		if c as u8 == b'\n' {
-			self.row += 1;
+			self.row += (self.bpp / 8) * 2;
 			self.col = 0;
 			return;
 		}
@@ -31,7 +31,7 @@ impl FramebufferWriter {
 		let offset = (c as u8 - 32) as usize * 16;
 		for y in 0..16 {
 			for x in 0..8 {
-				let cur_x = self.col + x;
+				let cur_x = self.col + (8 - x);
 				let cur_y = self.row + y;
 
 				if FONT[(y + offset as u16) as usize] >> x & 1 == 1 {
@@ -39,7 +39,7 @@ impl FramebufferWriter {
 					unsafe {
 						*((self.ptr
 							+ (cur_x * (self.bpp / 8) + cur_y * self.pitch)
-								as usize) as *mut u32) = 0xFFFFFF00
+								as usize) as *mut u32) = 0xFF0000
 					}
 				}
 			}
@@ -48,7 +48,7 @@ impl FramebufferWriter {
 		if self.pitch == self.col {
 			self.draw('\n');
 		} else {
-			self.col += 1;
+			self.col += (self.bpp / 8) * 2;
 		}
 	}
 }
