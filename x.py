@@ -2,21 +2,28 @@
 
 import sys
 import os
+from subprocess import call, PIPE, DEVNULL
 
 commands = []
-verbose = False
+quiet = False
 
 _ = lambda c: commands.append(c)
 
 
-def vprint(message):
-    if verbose:
-        print(message)
+def qprint(message):
+    if not quiet:
+        print("\033[1m\033[36m[ info ] =>\033[0m " + message)
+
+
+def eprint(message):
+    print("\033[1m\033[31m[ fail ] =>\033[0m " + message)
+    exit(1)
 
 
 def clean():
     _("rm -f build/*")
-    _("rm -rf isotmp/")
+    _("sudo umount -R isotmp/ | cat")
+    _("sudo rm -rf isotmp/")
     _("rm -f loopback_dev")
 
 
@@ -34,7 +41,6 @@ def hdd():
     _("sudo partprobe $(cat loopback_dev)")
     _("sudo mkfs.ext2 $(cat loopback_dev)p1")
     _("sudo mount $(cat loopback_dev)p1 isotmp/")
-    _("sudo mount build/bruhos.img isotmp/")
     _("sudo cp -Rf build/kernel.elf isotmp/")
     _("sudo cp -Rf run/limine.cfg isotmp/")
     _("sync")
@@ -60,7 +66,10 @@ def all():
 def help():
     print(
         """x.py - BruhOS v0.1
-USAGE: ./x.py [-v] subcommand
+USAGE: ./x.py [-q] subcommand
+
+FLAGS:
+    -q       - run quietly
 
 SUBCOMMANDS:
     clean    - clean out build files
@@ -82,9 +91,9 @@ def main():
         "hdd": hdd,
     }
 
-    if "-v" in sys.argv:
-        verbose = True
-        sys.argv.remove("-v")
+    if "-q" in sys.argv:
+        quiet = True
+        sys.argv.remove("-q")
 
     action = sys.argv.pop()
 
@@ -95,10 +104,11 @@ def main():
 
     actions[action]()
     for command in commands:
-        vprint(f"[ INFO ] => Running: {command}")
-        os.system(command)
+        qprint(f"Running: {command}")
+        if call(["sh", "-c", command], stdout=DEVNULL, stderr=PIPE) != 0:
+            eprint(f"Failed on: {command}")
 
-    vprint(f"[ INFO ] => Complete!")
+    qprint("Complete!")
 
 
 if __name__ == "__main__":

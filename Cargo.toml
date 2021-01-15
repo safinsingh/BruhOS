@@ -6,5 +6,9 @@ edition = "2018"
 
 [dependencies]
 stivale = { git = "https://github.com/safinsingh/stivale-rs" }
-# linux_console_font = { git = "https://github.com/safinsingh/linux_console_font" }
 zap_font = { path = "./lib/zap_font" }
+spin = "0.7.1"
+
+[dependencies.lazy_static]
+version = "1.4.0"
+features = ["spin_no_std"]
