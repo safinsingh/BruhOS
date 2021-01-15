@@ -3,6 +3,9 @@
 
 //! zap_font provides access to the 8x16 Zap font as a byte array.
 
+/// The font's size in pixels
+pub static FONT_DIMENTIONS: (u8, u8) = (8, 16);
+
 /// The byte array containing the font.
 pub static FONT: &[u8] = &[
 	0b00000000, 0b00000000, 0b00000000, 0b00000000, 0b00000000, 0b00000000,

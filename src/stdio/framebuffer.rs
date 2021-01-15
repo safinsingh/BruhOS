@@ -3,7 +3,23 @@ use core::fmt::{self, Write};
 use lazy_static::lazy_static;
 use spin::Mutex;
 use stivale::framebuffer::FramebufferTag;
-use zap_font::FONT;
+use zap_font::{FONT, FONT_DIMENTIONS};
+
+pub enum CommonColors {
+	Red,
+	Green,
+	Cyan,
+}
+
+impl Into<Pixel> for CommonColors {
+	fn into(self) -> Pixel {
+		match self {
+			Self::Red => Pixel::new(255, 0, 0),
+			Self::Green => Pixel::new(0, 255, 0),
+			Self::Cyan => Pixel::new(0, 255, 255),
+		}
+	}
+}
 
 pub struct Pixel {
 	r: u8,
@@ -16,10 +32,15 @@ impl Pixel {
 		(self.r as u32) << 16 | (self.g as u32) << 8 | self.b as u32
 	}
 
-	pub fn set_cyan(&mut self) {
-		self.r = 0;
-		self.g = 255;
-		self.b = 255;
+	pub fn new(r: u8, g: u8, b: u8) -> Self {
+		Self { r, g, b }
+	}
+
+	pub fn set(&mut self, to: impl Into<Pixel>) {
+		let to: Pixel = to.into();
+		self.r = to.r;
+		self.g = to.g;
+		self.b = to.b;
 	}
 
 	pub fn reset(&mut self) {
@@ -60,7 +81,7 @@ impl FramebufferWriter {
 
 	pub fn draw(&mut self, c: char) {
 		if c as u8 == b'\n' {
-			self.row += 16;
+			self.row += FONT_DIMENTIONS.1 as u16;
 			self.col = 0;
 			return;
 		}
@@ -68,14 +89,14 @@ impl FramebufferWriter {
 		let offset = (c as u8 - 32) as usize * 16;
 		for y in 0..16 {
 			for x in 0..8 {
-				let cur_x = self.col + (8 - x);
-				let cur_y = self.row + y;
+				let cur_x = self.col as usize + (8 - x);
+				let cur_y = self.row as usize + y;
 
 				let ptr = (self.ptr
-					+ (cur_x * (self.bpp / 8) + cur_y * self.pitch) as usize)
-					as *mut u32;
+					+ (cur_x * (self.bpp / 8) as usize
+						+ cur_y * self.pitch as usize) as usize) as *mut u32;
 
-				if FONT[(y + offset as u16) as usize] >> x & 1 == 1 {
+				if FONT[y + offset as usize] >> x & 1 == 1 {
 					unsafe { *ptr = self.fg.as_bits() }
 				} else {
 					unsafe { *ptr = self.bg.as_bits() }
@@ -86,7 +107,7 @@ impl FramebufferWriter {
 		if self.pitch == self.col {
 			self.draw('\n');
 		} else {
-			self.col += 8;
+			self.col += FONT_DIMENTIONS.0 as u16;
 		}
 	}
 }
@@ -103,18 +124,9 @@ impl Write for FramebufferWriter {
 }
 
 lazy_static! {
-	pub static ref STDIO_WRITER: Mutex<FramebufferWriter> =
-		Mutex::new(FramebufferWriter::new(unsafe {
-			STIVALE_STRUCT
-				.0
-				.get()
-				.as_ref()
-				.unwrap()
-				.as_ref()
-				.unwrap()
-				.framebuffer()
-				.unwrap()
-		}));
+	pub static ref STDIO_WRITER: Mutex<FramebufferWriter> = Mutex::new(
+		FramebufferWriter::new(STIVALE_STRUCT.inner().framebuffer().unwrap())
+	);
 }
 
 #[macro_export]
@@ -140,10 +152,24 @@ macro_rules! kprintln {
 #[macro_export]
 macro_rules! kiprintln {
 	($($arg:tt)+) => ({
-		use crate::stdio::framebuffer::STDIO_WRITER;
+		use crate::stdio::framebuffer::{STDIO_WRITER, CommonColors};
 
-		STDIO_WRITER.lock().fg.set_cyan();
+		STDIO_WRITER.lock().fg.set(CommonColors::Cyan);
 		kprint!("[ info ] => ");
+		STDIO_WRITER.lock().fg.reset();
+
+		kprint!($($arg)+);
+		kprintln!();
+	});
+}
+
+#[macro_export]
+macro_rules! keprintln {
+	($($arg:tt)+) => ({
+		use crate::stdio::framebuffer::{STDIO_WRITER, CommonColors};
+
+		STDIO_WRITER.lock().fg.set(CommonColors::Red);
+		kprint!("[ fail ] => ");
 		STDIO_WRITER.lock().fg.reset();
 
 		kprint!($($arg)+);

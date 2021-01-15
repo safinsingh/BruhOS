@@ -5,7 +5,6 @@ import os
 from subprocess import call, PIPE, DEVNULL
 
 commands = []
-quiet = False
 
 _ = lambda c: commands.append(c)
 
@@ -94,6 +93,7 @@ def main():
         "hdd": hdd,
     }
 
+    quiet = False
     if "-q" in sys.argv:
         quiet = True
         sys.argv.remove("-q")
