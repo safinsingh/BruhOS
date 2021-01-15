@@ -10,14 +10,17 @@ quiet = False
 _ = lambda c: commands.append(c)
 
 
-def qprint(message):
-    if not quiet:
-        print("\033[1m\033[36m[ info ] =>\033[0m " + message)
+def iprint(message):
+    print("\033[1m\033[36m[ info ] =>\033[0m " + message)
 
 
 def eprint(message):
     print("\033[1m\033[31m[ fail ] =>\033[0m " + message)
     exit(1)
+
+
+def sprint(message):
+    print("\033[1m\033[32m[ scss ] =>\033[0m " + message)
 
 
 def clean():
@@ -104,11 +107,13 @@ def main():
 
     actions[action]()
     for command in commands:
-        qprint(f"Running: {command}")
+        if not quiet:
+            iprint(f"Running: {command}")
+
         if call(["sh", "-c", command], stdout=DEVNULL, stderr=PIPE) != 0:
             eprint(f"Failed on: {command}")
 
-    qprint("Complete!")
+    sprint("Complete!")
 
 
 if __name__ == "__main__":
