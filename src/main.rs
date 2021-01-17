@@ -38,6 +38,7 @@ pub fn kmain(stivale_struct_ptr: usize) -> ! {
 
 	boot::info();
 	pmm::init();
+	pmm::sanity_check();
 
 	ksprintln!("Everything works!");
 	loop {

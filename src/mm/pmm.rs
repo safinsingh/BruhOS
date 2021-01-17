@@ -3,17 +3,56 @@ use crate::{kiprintln, ksprintln, polyfill, STIVALE_STRUCT};
 use core::cell::UnsafeCell;
 use stivale::memory::MemoryMapEntryType;
 
-struct PmmBitmap(UnsafeCell<Option<*mut u8>>);
+struct PmmBitmap(UnsafeCell<Option<usize>>);
 unsafe impl Send for PmmBitmap {}
 unsafe impl Sync for PmmBitmap {}
 
 impl PmmBitmap {
-	unsafe fn set(&self, to: *mut u8) {
+	unsafe fn set(&self, to: usize) {
 		*self.0.get() = Some(to);
 	}
 
 	fn inner_mut(&self) -> *mut u8 {
-		unsafe { self.0.get().as_ref().unwrap().unwrap() }
+		unsafe { self.0.get().as_ref().unwrap().unwrap() as *mut u8 }
+	}
+
+	fn unset_bit(&self, bit: usize) {
+		unsafe {
+			asm!(
+				"btr {}, {}",
+				in(reg) self.inner_mut().add(HIGH_HALF_OFFSET),
+				in(reg) bit,
+				options(nostack)
+			);
+		}
+	}
+
+	fn set_bit(&self, bit: usize) {
+		unsafe {
+			asm!(
+				"bts {}, {}",
+				in(reg) self.inner_mut().add(HIGH_HALF_OFFSET),
+				in(reg) bit,
+				options(nostack)
+			);
+		}
+	}
+
+	fn test_bit(&self, bit: usize) -> bool {
+		let flags: u64;
+
+		unsafe {
+			asm!(
+				"bt {}, {}",
+				"pushf",
+				"pop {}",
+				in(reg) self.inner_mut().add(HIGH_HALF_OFFSET),
+				in(reg) bit,
+				out(reg) flags
+			);
+		}
+
+		flags & 1 == 1
 	}
 }
 
@@ -49,7 +88,7 @@ pub fn init() {
 	for (idx, entry) in mmap_usable.clone().enumerate() {
 		if entry.size() >= bitmap_size as u64 {
 			unsafe {
-				BITMAP.set(entry.start_address() as *mut u8);
+				BITMAP.set(entry.start_address() as usize);
 				polyfill::memset(
 					BITMAP.inner_mut().add(HIGH_HALF_OFFSET),
 					0xFF,
@@ -82,14 +121,22 @@ pub fn init() {
 
 		for bit in (0..size).step_by(PAGE_SIZE) {
 			let bit = (addr + bit) as usize / PAGE_SIZE;
-
-			unsafe {
-				asm!("btr {}, {}", in(reg) BITMAP.inner_mut(), in(reg) bit, options(nostack));
-			}
+			BITMAP.unset_bit(bit);
 		}
 	}
 
 	kiprintln!("Initialized PMM bitmap at: {:p}", unsafe {
 		BITMAP.inner_mut().add(HIGH_HALF_OFFSET)
 	});
+}
+
+pub fn sanity_check() {
+	assert!(
+		!BITMAP.test_bit(unsafe {
+			(BITMAP.inner_mut().add(HIGH_HALF_OFFSET) as usize) / PAGE_SIZE
+		} as usize),
+		"Address space with bitmap marked as free!"
+	);
+
+	ksprintln!("PMM sanity checks passed!");
 }
