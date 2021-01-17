@@ -91,11 +91,6 @@ impl FramebufferWriter {
 		}
 	}
 
-	pub fn reset_pos(&mut self) {
-		self.row = 0;
-		self.col = 0;
-	}
-
 	pub fn draw(&mut self, c: char) {
 		match c {
 			'\n' => {
@@ -188,6 +183,7 @@ macro_rules! kprint {
 	($($arg:tt)+) => ({
 		use core::fmt::Write;
 		use crate::stdio::framebuffer::STDIO_WRITER;
+
 		let _ = STDIO_WRITER.lock().write_fmt(format_args!($($arg)+));
 	});
 }
@@ -196,11 +192,11 @@ macro_rules! kprint {
 #[macro_export]
 macro_rules! kprintln {
 	() => ({
-		kprint!("\n");
+		$crate::kprint!("\n");
 	});
 	($($arg:tt)+) => ({
-		kprint!($($arg)+);
-		kprintln!();
+		$crate::kprint!($($arg)+);
+		$crate::kprint!("\n");
 	});
 }
 
@@ -209,18 +205,12 @@ macro_rules! kprintln {
 #[macro_export]
 macro_rules! kiprintln {
 	($($arg:tt)+) => ({
-		use $crate::{
-			kprint,
-			kprintln,
-			stdio::framebuffer::{STDIO_WRITER, CommonColors}
-		};
+		$crate::STDIO_WRITER.lock().fg.set($crate::CommonColors::Cyan);
+		$crate::kprint!("[ info ] => ");
+		$crate::STDIO_WRITER.lock().fg.reset();
 
-		STDIO_WRITER.lock().fg.set(CommonColors::Cyan);
-		kprint!("[ info ] => ");
-		STDIO_WRITER.lock().fg.reset();
-
-		kprint!($($arg)+);
-		kprintln!();
+		$crate::kprint!($($arg)+);
+		$crate::kprintln!();
 	});
 }
 
@@ -229,18 +219,12 @@ macro_rules! kiprintln {
 #[macro_export]
 macro_rules! keprintln {
 	($($arg:tt)+) => ({
-		use $crate::{
-			kprint,
-			kprintln,
-			stdio::framebuffer::{STDIO_WRITER, CommonColors}
-		};
+		$crate::STDIO_WRITER.lock().fg.set($crate::CommonColors::Red);
+		$crate::kprint!("[ fail ] => ");
+		$crate::STDIO_WRITER.lock().fg.reset();
 
-		STDIO_WRITER.lock().fg.set(CommonColors::Red);
-		kprint!("[ fail ] => ");
-		STDIO_WRITER.lock().fg.reset();
-
-		kprint!($($arg)+);
-		kprintln!();
+		$crate::kprint!($($arg)+);
+		$crate::kprintln!();
 	});
 }
 
@@ -249,17 +233,11 @@ macro_rules! keprintln {
 #[macro_export]
 macro_rules! ksprintln {
 	($($arg:tt)+) => ({
-		use $crate::{
-			kprint,
-			kprintln,
-			stdio::framebuffer::{STDIO_WRITER, CommonColors}
-		};
+		$crate::STDIO_WRITER.lock().fg.set($crate::CommonColors::Green);
+		$crate::kprint!("[ scss ] => ");
+		$crate::STDIO_WRITER.lock().fg.reset();
 
-		STDIO_WRITER.lock().fg.set(CommonColors::Green);
-		kprint!("[ scss ] => ");
-		STDIO_WRITER.lock().fg.reset();
-
-		kprint!($($arg)+);
-		kprintln!();
-	})
+		$crate::kprint!($($arg)+);
+		$crate::kprintln!();
+	});
 }

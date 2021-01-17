@@ -51,7 +51,6 @@ impl StivaleInfo {
 pub static STIVALE_STRUCT: StivaleInfo = StivaleInfo(UnsafeCell::new(None));
 
 pub fn info() {
-	kiprintln!("Loaded kernel");
 	kiprintln!(
 		"Detected bootloader: {} @ {}",
 		STIVALE_STRUCT

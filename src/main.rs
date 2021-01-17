@@ -45,20 +45,17 @@ pub fn kmain(stivale_struct_ptr: usize) -> ! {
 fn panic(info: &PanicInfo) -> ! {
 	STDIO_WRITER.lock().fg.set(CommonColors::White);
 	STDIO_WRITER.lock().bg.set(CommonColors::Black);
-	STDIO_WRITER.lock().reset_pos();
 
 	static DEFAULT_LOCATION: Location =
 		Location::internal_constructor("UNKNOWN", 0, 0);
 	let location = info.location().unwrap_or(&DEFAULT_LOCATION);
 
 	keprintln!(
-		"Kernel panicked with: {:#?}\n\tPanicked at: {} ({}, {})\n\tWith \
-		 payload: {:#?}",
-		info.message().unwrap_or(&format_args!("UNKNOWN")),
+		"Kernel panicked!\n\tWhere: {} ({}, {})\n\tWith: {:#?}",
 		location.file(),
 		location.line(),
 		location.column(),
-		info.payload().downcast_ref::<&str>().unwrap_or(&"N/A"),
+		info.message().unwrap_or(&format_args!("UNKNOWN")),
 	);
 
 	loop {
