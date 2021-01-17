@@ -1,14 +1,22 @@
 [package]
-name = "bruh_os"
-version = "0.1.0"
 authors = ["safinsingh <safin.singh@gmail.com>"]
 edition = "2018"
+name = "bruh_os"
+version = "0.1.0"
 
 [dependencies]
-stivale = { git = "https://github.com/safinsingh/stivale-rs" }
-zap_font = { path = "./lib/zap_font" }
 spin = "0.7.1"
+bitflags = "1.2.1"
 
 [dependencies.lazy_static]
-version = "1.4.0"
 features = ["spin_no_std"]
+version = "1.4.0"
+
+[dependencies.linux_console_font]
+git = "https://github.com/safinsingh/linux_console_font"
+
+[dependencies.stivale]
+git = "https://github.com/safinsingh/stivale-rs"
+
+[dependencies.zap_font]
+path = "./lib/zap_font"

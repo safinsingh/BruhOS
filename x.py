@@ -4,9 +4,17 @@ import sys
 import os
 from subprocess import call, PIPE, DEVNULL
 
-commands = []
 
-_ = lambda c: commands.append(c)
+verbose = False
+release = False
+
+
+def _(command):
+    if verbose:
+        iprint(f"Running: {command}")
+
+    if call(["sh", "-c", command], stdout=DEVNULL, stderr=PIPE) != 0:
+        eprint(f"Failed on: {command}")
 
 
 def iprint(message):
@@ -27,11 +35,19 @@ def clean():
     _("sudo umount -R isotmp/ | cat")
     _("sudo rm -rf isotmp/")
     _("rm -f loopback_dev")
+    sprint("Clean is complete!")
 
 
 def build():
-    _('RUSTFLAGS="-C link-arg=-Tsrc/linker.ld" cargo build')
-    _("cp target/x86_64-bruh_os/debug/bruh_os build/kernel.elf")
+    arg = ["", "--release"]
+    dir = ["debug", "release"]
+
+    if release:
+        iprint("Building in release mode!")
+
+    _(f'RUSTFLAGS="-C link-arg=-Tsrc/linker.ld" cargo build {arg[release]}')
+    _(f"cp target/x86_64-bruh_os/{dir[release]}/bruh_os build/kernel.elf")
+    sprint("Build is complete!")
 
 
 def hdd():
@@ -49,12 +65,14 @@ def hdd():
     _("sudo umount isotmp/")
     _("sudo losetup -d $(cat loopback_dev)")
     _("./lib/limine/limine-install build/bruhos.img")
+    sprint("HDD is complete!")
 
 
 def run():
     _(
         "qemu-system-x86_64 -m 8G -net none -smp 4 -drive format=raw,file=build/bruhos.img"
     )
+    sprint("Run is complete!")
 
 
 def all():
@@ -68,10 +86,11 @@ def all():
 def help():
     print(
         """x.py - BruhOS v0.1
-USAGE: ./x.py [-q] subcommand
+USAGE: ./x.py [-v/-r] subcommand
 
 FLAGS:
-    -q       - run quietly
+    -v       - run verbosely
+    -r       - build in release mode (if applicable)
 
 SUBCOMMANDS:
     clean    - clean out build files
@@ -93,10 +112,15 @@ def main():
         "hdd": hdd,
     }
 
-    quiet = False
-    if "-q" in sys.argv:
-        quiet = True
-        sys.argv.remove("-q")
+    if "-v" in sys.argv:
+        global verbose
+        verbose = True
+        sys.argv.remove("-v")
+
+    if "-r" in sys.argv:
+        global release
+        release = True
+        sys.argv.remove("-r")
 
     action = sys.argv.pop()
 
@@ -106,13 +130,6 @@ def main():
         exit(1)
 
     actions[action]()
-    for command in commands:
-        if not quiet:
-            iprint(f"Running: {command}")
-
-        if call(["sh", "-c", command], stdout=DEVNULL, stderr=PIPE) != 0:
-            eprint(f"Failed on: {command}")
-
     sprint("Complete!")
 
 

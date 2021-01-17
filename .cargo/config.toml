@@ -5,4 +5,4 @@ build-std-features = ["compiler-builtins-mem"]
 [build]
 target = "run/x86_64-bruh_os.json"
 rustflags = ["-C", "link-arg=-Tsrc/linker.ld"]
-jobs = 5
+jobs = 4

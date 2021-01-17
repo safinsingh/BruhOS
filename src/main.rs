@@ -4,41 +4,24 @@
 #![feature(const_panic)]
 #![feature(panic_info_message)]
 #![feature(panic_internals)]
+#![deny(missing_docs)]
 #![warn(clippy::all)]
 
+//! BruhOS is an x86_64 operating system
+
 mod arch;
+mod boot;
+mod mm;
+mod polyfill;
 mod stdio;
 
 use arch::cpu;
-use core::{
-	cell::UnsafeCell,
-	panic::{Location, PanicInfo},
-};
-use stivale::{HeaderFramebufferTag, StivaleHeader, StivaleStructure};
+use boot::STIVALE_STRUCT;
+use core::panic::{Location, PanicInfo};
+use mm::pmm;
+use stdio::framebuffer::{CommonColors, STDIO_WRITER};
 
-#[link_section = ".stivale2hdr"]
-#[used]
-static STIVALE_HDR: StivaleHeader = StivaleHeader::new(STACK[0] as *const u8)
-	.tags((&FRAMEBUFFER_TAG as *const HeaderFramebufferTag).cast());
-
-static STACK: [u8; 4096] = [0; 4096];
-static FRAMEBUFFER_TAG: HeaderFramebufferTag =
-	HeaderFramebufferTag::new().bpp(32);
-
-struct StivaleInfo(UnsafeCell<Option<StivaleStructure>>);
-unsafe impl Send for StivaleInfo {}
-unsafe impl Sync for StivaleInfo {}
-
-impl StivaleInfo {
-	fn inner(&self) -> &StivaleStructure {
-		// SAFETY: safe assuming it's called after STIVALE_STRUCT is set
-		// properly
-		unsafe { self.0.get().as_ref().unwrap().as_ref().unwrap() }
-	}
-}
-
-static STIVALE_STRUCT: StivaleInfo = StivaleInfo(UnsafeCell::new(None));
-
+/// Bootloader entrypoint (kernel main)
 #[no_mangle]
 pub fn kmain(stivale_struct_ptr: usize) -> ! {
 	// SAFETY:
@@ -47,15 +30,11 @@ pub fn kmain(stivale_struct_ptr: usize) -> ! {
 	// 2. loading is valid when a stivale2-compliant bootloader is in use. WILL
 	// cause UB otherwise.
 	unsafe {
-		*STIVALE_STRUCT.0.get() = Some(stivale::load(stivale_struct_ptr));
+		STIVALE_STRUCT.set(stivale::load(stivale_struct_ptr));
 	}
 
-	kiprintln!("Loaded kernel");
-	kiprintln!(
-		"Detected bootloader: {} @ {}",
-		STIVALE_STRUCT.inner().bootloader_brand().unwrap(),
-		STIVALE_STRUCT.inner().bootloader_version().unwrap(),
-	);
+	boot::info();
+	pmm::init();
 
 	loop {
 		cpu::wait_for_interrupt();
@@ -64,18 +43,22 @@ pub fn kmain(stivale_struct_ptr: usize) -> ! {
 
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
+	STDIO_WRITER.lock().fg.set(CommonColors::White);
+	STDIO_WRITER.lock().bg.set(CommonColors::Black);
+	STDIO_WRITER.lock().reset_pos();
+
 	static DEFAULT_LOCATION: Location =
 		Location::internal_constructor("UNKNOWN", 0, 0);
 	let location = info.location().unwrap_or(&DEFAULT_LOCATION);
 
 	keprintln!(
-		"Kernel panicked with: {:#?}\n            Panicked at: {} ({}, {})\n            With payload: \
-		 {:#?}",
+		"Kernel panicked with: {:#?}\n\tPanicked at: {} ({}, {})\n\tWith \
+		 payload: {:#?}",
 		info.message().unwrap_or(&format_args!("UNKNOWN")),
 		location.file(),
 		location.line(),
 		location.column(),
-		info.payload()
+		info.payload().downcast_ref::<&str>().unwrap_or(&"N/A"),
 	);
 
 	loop {
