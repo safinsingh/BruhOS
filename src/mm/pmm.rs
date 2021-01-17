@@ -21,7 +21,7 @@ static BITMAP: PmmBitmap = PmmBitmap(UnsafeCell::new(None));
 
 pub fn init() {
 	let mmap_usable = STIVALE_STRUCT
-		.inner_mut()
+		.inner()
 		.memory_map()
 		.unwrap()
 		.iter()
@@ -42,7 +42,7 @@ pub fn init() {
 	}
 
 	// highest page / page size / 8 bits per byte
-	let bitmap_size = super::div_up(top_page as usize, super::PAGE_SIZE) / 8;
+	let bitmap_size = polyfill::div_up(top_page as usize, super::PAGE_SIZE) / 8;
 	kiprintln!("PMM bitmap size: {} KiB", bitmap_size / 1024);
 
 	let mut bitmap_entry = 0;
@@ -55,13 +55,15 @@ pub fn init() {
 					0xFF,
 					bitmap_size,
 				);
-
-				// Huge brain moment
-				// <does something big brain>
-				bitmap_entry = idx;
-
-				break;
 			}
+
+			// Huge brain moment
+			// <does something big brain>
+			// eh nvm
+
+			ksprintln!("Selected region #{} to place bitmap in!", idx + 1);
+			bitmap_entry = idx;
+			break;
 		}
 	}
 
@@ -72,6 +74,8 @@ pub fn init() {
 		let mut addr = entry.start_address();
 
 		if idx == bitmap_entry {
+			// omit the bitmap entry from free aspace
+			kiprintln!("Omitting bitmap from free space...");
 			size -= bitmap_size as u64;
 			addr += bitmap_size as u64;
 		}

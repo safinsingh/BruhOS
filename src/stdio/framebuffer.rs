@@ -17,14 +17,14 @@ pub enum CommonColors {
 	Black,
 }
 
-impl Into<Pixel> for CommonColors {
-	fn into(self) -> Pixel {
-		match self {
-			Self::Red => Pixel::new(255, 0, 0),
-			Self::Green => Pixel::new(0, 255, 0),
-			Self::Cyan => Pixel::new(0, 255, 255),
-			Self::White => Pixel::new(255, 255, 255),
-			Self::Black => Pixel::new(0, 0, 0),
+impl From<CommonColors> for Pixel {
+	fn from(c: CommonColors) -> Self {
+		match c {
+			CommonColors::Red => Self::new(255, 0, 0),
+			CommonColors::Green => Self::new(0, 255, 0),
+			CommonColors::Cyan => Self::new(0, 255, 255),
+			CommonColors::White => Self::new(255, 255, 255),
+			CommonColors::Black => Self::new(0, 0, 0),
 		}
 	}
 }
@@ -96,13 +96,11 @@ impl FramebufferWriter {
 			'\n' => {
 				self.row += FONT_DIMENSIONS.1 as u16;
 				self.col = 0;
-				return;
 			}
 			'\t' => {
 				for _ in 0..12 {
 					self.draw(' ');
 				}
-				return;
 			}
 			_ => {
 				let offset = (c as u8 - 32) as usize * 16;
@@ -158,12 +156,13 @@ impl FramebufferWriter {
 
 impl Write for FramebufferWriter {
 	fn write_str(&mut self, s: &str) -> fmt::Result {
-		Ok(for c in s.chars() {
+		for c in s.chars() {
 			match c {
 				c if c.is_ascii() => self.draw(c),
 				_ => return Err(fmt::Error),
 			}
-		})
+		}
+		Ok(())
 	}
 }
 

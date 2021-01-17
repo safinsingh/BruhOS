@@ -6,6 +6,9 @@
 #![feature(panic_internals)]
 #![deny(missing_docs)]
 #![warn(clippy::all)]
+#![warn(clippy::pedantic)]
+#![warn(clippy::nursery)]
+#![warn(clippy::cargo)]
 
 //! BruhOS is an x86_64 operating system
 
@@ -36,6 +39,7 @@ pub fn kmain(stivale_struct_ptr: usize) -> ! {
 	boot::info();
 	pmm::init();
 
+	ksprintln!("Everything works!");
 	loop {
 		cpu::wait_for_interrupt();
 	}

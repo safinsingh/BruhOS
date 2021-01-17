@@ -72,3 +72,8 @@ pub unsafe extern "C" fn memset(s: *mut u8, c: c_int, n: usize) -> *mut u8 {
 	set_bytes(s, c as u8, n);
 	s
 }
+
+// https://www.reddit.com/r/rust/comments/bk7v15/my_next_favourite_way_to_divide_integers_rounding/
+pub fn div_up(a: usize, b: usize) -> usize {
+	(0..a).step_by(b).size_hint().0
+}

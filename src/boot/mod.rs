@@ -33,19 +33,6 @@ impl StivaleInfo {
 				.expect("Stivale struct is empty!")
 		}
 	}
-
-	pub fn inner_mut(&self) -> &mut StivaleStructure {
-		// SAFETY: safe assuming it's called after STIVALE_STRUCT is set
-		// properly
-		unsafe {
-			self.0
-				.get()
-				.as_mut()
-				.expect("Stivale struct was not yet initialized!")
-				.as_mut()
-				.expect("Stivale struct is empty!")
-		}
-	}
 }
 
 pub static STIVALE_STRUCT: StivaleInfo = StivaleInfo(UnsafeCell::new(None));
