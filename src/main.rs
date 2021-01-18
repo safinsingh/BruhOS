@@ -40,6 +40,8 @@ pub fn kmain(stivale_struct_ptr: usize) -> ! {
 	pmm::init();
 	pmm::sanity_check();
 
+	kprintln!(include_str!("../res/ascii.txt"));
+
 	ksprintln!("Everything works!");
 	loop {
 		cpu::wait_for_interrupt();

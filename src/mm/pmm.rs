@@ -1,44 +1,48 @@
 use super::{HIGH_HALF_OFFSET, PAGE_SIZE};
 use crate::{kiprintln, ksprintln, polyfill, STIVALE_STRUCT};
 use core::cell::UnsafeCell;
+use spin::Mutex;
 use stivale::memory::MemoryMapEntryType;
 
-struct PmmBitmap(UnsafeCell<Option<usize>>);
+struct PmmBitmap(UnsafeCell<Mutex<Option<usize>>>);
 unsafe impl Send for PmmBitmap {}
 unsafe impl Sync for PmmBitmap {}
 
 impl PmmBitmap {
-	unsafe fn set(&self, to: usize) {
-		*self.0.get() = Some(to);
+	unsafe fn set_bitmap_ptr(&self, to: usize) {
+		*self.0.get().as_ref().unwrap().lock() = Some(to);
 	}
 
-	fn inner_mut(&self) -> *mut u8 {
-		unsafe { self.0.get().as_ref().unwrap().unwrap() as *mut u8 }
+	fn get_bitmap_ptr(&self) -> *mut u8 {
+		unsafe { self.0.get().as_ref().unwrap().lock().unwrap() as *mut u8 }
 	}
 
-	fn unset_bit(&self, bit: usize) {
+	// offset = page-aligned address / page size
+	fn bitmap_reset_bit(&self, offset: usize) {
 		unsafe {
 			asm!(
 				"btr {}, {}",
-				in(reg) self.inner_mut().add(HIGH_HALF_OFFSET),
-				in(reg) bit,
+				in(reg) self.get_bitmap_ptr().add(HIGH_HALF_OFFSET),
+				in(reg) offset,
 				options(nostack)
 			);
 		}
 	}
 
-	fn set_bit(&self, bit: usize) {
+	// offset = page-aligned address / page size
+	fn bitmap_set_bit(&self, offset: usize) {
 		unsafe {
 			asm!(
 				"bts {}, {}",
-				in(reg) self.inner_mut().add(HIGH_HALF_OFFSET),
-				in(reg) bit,
+				in(reg) self.get_bitmap_ptr().add(HIGH_HALF_OFFSET),
+				in(reg) offset,
 				options(nostack)
 			);
 		}
 	}
 
-	fn test_bit(&self, bit: usize) -> bool {
+	// offset = page-aligned address / page size
+	fn bitmap_test_bit(&self, offset: usize) -> bool {
 		let flags: u64;
 
 		unsafe {
@@ -46,8 +50,8 @@ impl PmmBitmap {
 				"bt {}, {}",
 				"pushf",
 				"pop {}",
-				in(reg) self.inner_mut().add(HIGH_HALF_OFFSET),
-				in(reg) bit,
+				in(reg) self.get_bitmap_ptr().add(HIGH_HALF_OFFSET),
+				in(reg) offset,
 				out(reg) flags
 			);
 		}
@@ -56,7 +60,7 @@ impl PmmBitmap {
 	}
 }
 
-static BITMAP: PmmBitmap = PmmBitmap(UnsafeCell::new(None));
+static BITMAP: PmmBitmap = PmmBitmap(UnsafeCell::new(Mutex::new(None)));
 
 pub fn init() {
 	let mmap_usable = STIVALE_STRUCT
@@ -88,9 +92,9 @@ pub fn init() {
 	for (idx, entry) in mmap_usable.clone().enumerate() {
 		if entry.size() >= bitmap_size as u64 {
 			unsafe {
-				BITMAP.set(entry.start_address() as usize);
+				BITMAP.set_bitmap_ptr(entry.start_address() as usize);
 				polyfill::memset(
-					BITMAP.inner_mut().add(HIGH_HALF_OFFSET),
+					BITMAP.get_bitmap_ptr().add(HIGH_HALF_OFFSET),
 					0xFF,
 					bitmap_size,
 				);
@@ -121,22 +125,24 @@ pub fn init() {
 
 		for bit in (0..size).step_by(PAGE_SIZE) {
 			let bit = (addr + bit) as usize / PAGE_SIZE;
-			BITMAP.unset_bit(bit);
+			BITMAP.bitmap_reset_bit(bit);
 		}
 	}
 
 	kiprintln!("Initialized PMM bitmap at: {:p}", unsafe {
-		BITMAP.inner_mut().add(HIGH_HALF_OFFSET)
+		BITMAP.get_bitmap_ptr().add(HIGH_HALF_OFFSET)
 	});
 }
 
 pub fn sanity_check() {
 	assert!(
-		!BITMAP.test_bit(unsafe {
-			(BITMAP.inner_mut().add(HIGH_HALF_OFFSET) as usize) / PAGE_SIZE
+		!BITMAP.bitmap_test_bit(unsafe {
+			(BITMAP.get_bitmap_ptr().add(HIGH_HALF_OFFSET) as usize) / PAGE_SIZE
 		} as usize),
 		"Address space with bitmap marked as free!"
 	);
+
+	// ...
 
 	ksprintln!("PMM sanity checks passed!");
 }
