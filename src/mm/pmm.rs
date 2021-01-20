@@ -1,66 +1,90 @@
-use super::{HIGH_HALF_OFFSET, PAGE_SIZE};
+use super::PAGE_SIZE;
 use crate::{kiprintln, ksprintln, polyfill, STIVALE_STRUCT};
-use core::cell::UnsafeCell;
+use core::{
+	alloc::{GlobalAlloc, Layout},
+	cell::UnsafeCell,
+};
 use spin::Mutex;
 use stivale::memory::MemoryMapEntryType;
 
-struct PmmBitmap(UnsafeCell<Mutex<Option<usize>>>);
-unsafe impl Send for PmmBitmap {}
-unsafe impl Sync for PmmBitmap {}
+struct PmmInner {
+	bitmap_ptr: Option<usize>,
+	highest_bit: Option<usize>,
+	last_used_page: usize,
+}
 
-impl PmmBitmap {
-	unsafe fn set_bitmap_ptr(&self, to: usize) {
-		*self.0.get().as_ref().unwrap().lock() = Some(to);
+struct Pmm(UnsafeCell<Mutex<PmmInner>>);
+unsafe impl Send for Pmm {}
+unsafe impl Sync for Pmm {}
+
+impl Pmm {
+	const fn new() -> Self {
+		Self(UnsafeCell::new(Mutex::new(PmmInner {
+			bitmap_ptr: None,
+			highest_bit: None,
+			last_used_page: 0,
+		})))
 	}
 
+	#[inline]
+	unsafe fn set_bitmap_ptr(&self, to: usize) {
+		self.0.get().as_ref().unwrap().lock().bitmap_ptr = Some(to);
+	}
+
+	#[inline]
+	unsafe fn set_highest_bit(&self, to: usize) {
+		self.0.get().as_ref().unwrap().lock().highest_bit = Some(to);
+	}
+
+	#[inline]
+	unsafe fn set_last_used_page(&self, to: usize) {
+		self.0.get().as_ref().unwrap().lock().last_used_page = to;
+	}
+
+	#[inline]
 	fn get_bitmap_ptr(&self) -> *mut u8 {
-		unsafe { self.0.get().as_ref().unwrap().lock().unwrap() as *mut u8 }
+		unsafe {
+			self.0.get().as_ref().unwrap().lock().bitmap_ptr.unwrap() as *mut u8
+		}
+	}
+
+	#[inline]
+	fn get_highest_bit(&self) -> usize {
+		unsafe { self.0.get().as_ref().unwrap().lock().highest_bit.unwrap() }
+	}
+
+	#[inline]
+	fn get_last_used_page(&self) -> usize {
+		unsafe { self.0.get().as_ref().unwrap().lock().last_used_page }
 	}
 
 	// offset = page-aligned address / page size
 	fn bitmap_reset_bit(&self, offset: usize) {
 		unsafe {
-			asm!(
-				"btr {}, {}",
-				in(reg) self.get_bitmap_ptr().add(HIGH_HALF_OFFSET),
-				in(reg) offset,
-				options(nostack)
-			);
+			*self.get_bitmap_ptr().add(polyfill::div_up(offset, 8)) &=
+				0 << (8 - (offset % 8) - 1);
 		}
 	}
 
 	// offset = page-aligned address / page size
 	fn bitmap_set_bit(&self, offset: usize) {
 		unsafe {
-			asm!(
-				"bts {}, {}",
-				in(reg) self.get_bitmap_ptr().add(HIGH_HALF_OFFSET),
-				in(reg) offset,
-				options(nostack)
-			);
+			*self.get_bitmap_ptr().add(polyfill::div_up(offset, 8)) |=
+				1 << (8 - (offset % 8) - 1);
 		}
 	}
 
 	// offset = page-aligned address / page size
 	fn bitmap_test_bit(&self, offset: usize) -> bool {
-		let flags: u64;
-
 		unsafe {
-			asm!(
-				"bt {}, {}",
-				"pushf",
-				"pop {}",
-				in(reg) self.get_bitmap_ptr().add(HIGH_HALF_OFFSET),
-				in(reg) offset,
-				out(reg) flags
-			);
+			(*self.get_bitmap_ptr().add(polyfill::div_up(offset, 8))
+				>> (8 - (offset % 8) - 1))
+				& 1 == 1
 		}
-
-		flags & 1 == 1
 	}
 }
 
-static BITMAP: PmmBitmap = PmmBitmap(UnsafeCell::new(Mutex::new(None)));
+static PMM: Pmm = Pmm::new();
 
 pub fn init() {
 	let mmap_usable = STIVALE_STRUCT
@@ -85,19 +109,19 @@ pub fn init() {
 	}
 
 	// highest page / page size / 8 bits per byte
-	let bitmap_size = polyfill::div_up(top_page as usize, super::PAGE_SIZE) / 8;
+	let bitmap_bits = polyfill::div_up(top_page as usize, super::PAGE_SIZE);
+	unsafe {
+		PMM.set_highest_bit(bitmap_bits);
+	}
+	let bitmap_size = bitmap_bits / 8;
 	kiprintln!("PMM bitmap size: {} KiB", bitmap_size / 1024);
 
 	let mut bitmap_entry = 0;
 	for (idx, entry) in mmap_usable.clone().enumerate() {
 		if entry.size() >= bitmap_size as u64 {
 			unsafe {
-				BITMAP.set_bitmap_ptr(entry.start_address() as usize);
-				polyfill::memset(
-					BITMAP.get_bitmap_ptr().add(HIGH_HALF_OFFSET),
-					0xFF,
-					bitmap_size,
-				);
+				PMM.set_bitmap_ptr(entry.start_address() as usize);
+				polyfill::memset(PMM.get_bitmap_ptr(), 0xFF, bitmap_size);
 			}
 
 			// Huge brain moment
@@ -117,32 +141,84 @@ pub fn init() {
 		let mut addr = entry.start_address();
 
 		if idx == bitmap_entry {
-			// omit the bitmap entry from free aspace
-			kiprintln!("Omitting bitmap from free space...");
+			kiprintln!("Omitting bitmap from free address space...");
 			size -= bitmap_size as u64;
 			addr += bitmap_size as u64;
 		}
 
 		for bit in (0..size).step_by(PAGE_SIZE) {
-			let bit = (addr + bit) as usize / PAGE_SIZE;
-			BITMAP.bitmap_reset_bit(bit);
+			PMM.bitmap_reset_bit((addr + bit) as usize / PAGE_SIZE);
 		}
 	}
 
-	kiprintln!("Initialized PMM bitmap at: {:p}", unsafe {
-		BITMAP.get_bitmap_ptr().add(HIGH_HALF_OFFSET)
-	});
+	kiprintln!("Initialized PMM bitmap at: {:#p}", PMM.get_bitmap_ptr());
+}
+
+unsafe impl GlobalAlloc for Pmm {
+	unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
+		let pages = polyfill::div_up(layout.size(), PAGE_SIZE);
+		let mut contiguous = 0;
+
+		for offset in self.get_last_used_page()..self.get_highest_bit() {
+			if !self.bitmap_test_bit(offset) {
+				contiguous += 1;
+
+				if contiguous == pages {
+					let page = offset + 1 - contiguous;
+					self.set_last_used_page(page);
+
+					for p in page..page + contiguous {
+						self.bitmap_set_bit(p);
+					}
+
+					return (page * PAGE_SIZE) as *mut u8;
+				}
+			} else {
+				contiguous = 0;
+			}
+		}
+
+		// oom i think? until paging is set up i guess
+		panic!("PMM: OOM!");
+	}
+
+	unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
+		let pages = polyfill::div_up(layout.size(), PAGE_SIZE);
+		for page in 0..pages {
+			self.bitmap_reset_bit((ptr as usize + page) / PAGE_SIZE)
+		}
+	}
 }
 
 pub fn sanity_check() {
 	assert!(
-		!BITMAP.bitmap_test_bit(unsafe {
-			(BITMAP.get_bitmap_ptr().add(HIGH_HALF_OFFSET) as usize) / PAGE_SIZE
-		} as usize),
-		"Address space with bitmap marked as free!"
+		PMM.bitmap_test_bit(
+			(PMM.get_bitmap_ptr() as usize) / PAGE_SIZE as usize
+		),
+		"Address space with bitmap marked as free: {}",
+		unsafe { *PMM.get_bitmap_ptr() }
 	);
 
-	// ...
+	let ptr_to_int = unsafe { PMM.alloc(Layout::new::<u8>()) };
+	unsafe {
+		*ptr_to_int = 1u8;
+	}
 
-	ksprintln!("PMM sanity checks passed!");
+	assert!(
+		PMM.bitmap_test_bit(ptr_to_int as usize / PAGE_SIZE),
+		"Allocator failed to allocate u8! Allocated at: {:#p}",
+		ptr_to_int
+	);
+
+	unsafe {
+		PMM.dealloc(ptr_to_int, Layout::new::<u8>());
+	};
+
+	assert!(
+		!PMM.bitmap_test_bit(ptr_to_int as usize / PAGE_SIZE),
+		"Allocator failed to deallocate u8! Exists at: {:#p}",
+		ptr_to_int
+	);
+
+	ksprintln!("PMM alloc/dealloc sanity checks passed!");
 }

@@ -122,12 +122,20 @@ impl FramebufferWriter {
 					}
 				}
 
+				if self.pitch == self.col {
+					self.draw('\n');
+				} else {
+					self.col += FONT_DIMENSIONS.0 as u16;
+				}
+
 				if self.row == self.height {
+					self.row -= 1;
+
 					for y in 0..FONT_DIMENSIONS.1 {
 						for x in 0..self.pitch {
 							let ptr = (self.ptr
-								+ y as usize * self.pitch as usize
-								+ x as usize) as *mut u32;
+								+ (self.pitch as usize * y as usize)
+								+ (x as usize)) as *mut u32;
 							unsafe { *ptr = 0 }
 						}
 					}
@@ -136,18 +144,13 @@ impl FramebufferWriter {
 						polyfill::memmove(
 							self.ptr as *mut u8,
 							(self.ptr
-								+ self.pitch as usize
-									* FONT_DIMENSIONS.1 as usize) as *mut u8,
-							self.size,
+								+ ((FONT_DIMENSIONS.1 as usize)
+									* self.pitch as usize) as usize) as *mut u8,
+							self.size
+								- (self.pitch as usize
+									* FONT_DIMENSIONS.1 as usize) as usize,
 						);
 					}
-
-					self.row -= 1;
-				}
-				if self.pitch == self.col {
-					self.draw('\n');
-				} else {
-					self.col += FONT_DIMENSIONS.0 as u16;
 				}
 			}
 		}

@@ -70,7 +70,7 @@ def hdd():
 
 def run():
     _(
-        "qemu-system-x86_64 -m 8G -net none -smp 4 -drive format=raw,file=build/bruhos.img"
+        "qemu-system-x86_64 -m 2G -net none -smp 4 -drive format=raw,file=build/bruhos.img"
     )
     sprint("Run is complete!")
 
