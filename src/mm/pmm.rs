@@ -1,5 +1,5 @@
 use super::PAGE_SIZE;
-use crate::{kiprintln, ksprintln, polyfill, STIVALE_STRUCT};
+use crate::{kiprintln, ksprintln, util, STIVALE_STRUCT};
 use core::{
 	alloc::{GlobalAlloc, Layout},
 	cell::UnsafeCell,
@@ -61,7 +61,7 @@ impl Pmm {
 	// offset = page-aligned address / page size
 	fn bitmap_reset_bit(&self, offset: usize) {
 		unsafe {
-			*self.get_bitmap_ptr().add(polyfill::div_up(offset, 8)) &=
+			*self.get_bitmap_ptr().add(util::div_up(offset, 8)) &=
 				0 << (8 - (offset % 8) - 1);
 		}
 	}
@@ -69,7 +69,7 @@ impl Pmm {
 	// offset = page-aligned address / page size
 	fn bitmap_set_bit(&self, offset: usize) {
 		unsafe {
-			*self.get_bitmap_ptr().add(polyfill::div_up(offset, 8)) |=
+			*self.get_bitmap_ptr().add(util::div_up(offset, 8)) |=
 				1 << (8 - (offset % 8) - 1);
 		}
 	}
@@ -77,7 +77,7 @@ impl Pmm {
 	// offset = page-aligned address / page size
 	fn bitmap_test_bit(&self, offset: usize) -> bool {
 		unsafe {
-			(*self.get_bitmap_ptr().add(polyfill::div_up(offset, 8))
+			(*self.get_bitmap_ptr().add(util::div_up(offset, 8))
 				>> (8 - (offset % 8) - 1))
 				& 1 == 1
 		}
@@ -99,32 +99,38 @@ pub fn init() {
 		.fold(0, |acc, cur| cur.end_address().max(acc)) as usize;
 	kiprintln!("Addressing: {} MiB of memory", highest_page / 1024 / 1024);
 
-	let highest_bit = polyfill::div_up(highest_page, super::PAGE_SIZE);
+	let highest_bit = util::div_up(highest_page, super::PAGE_SIZE);
 	let bitmap_size = highest_bit / 8;
 
 	unsafe {
 		PMM.set_highest_bit(highest_bit);
 	}
 
-	let mut bitmap_entry = 0;
+	let mut bitmap_entry = None;
 	for (idx, entry) in mmap_usable.clone().enumerate() {
 		if entry.size() >= bitmap_size as u64 {
 			unsafe {
 				PMM.set_bitmap_ptr(entry.start_address() as usize);
-				polyfill::memset(PMM.get_bitmap_ptr(), 0xFF, bitmap_size);
+				core::ptr::write_bytes(PMM.get_bitmap_ptr(), 0xFF, bitmap_size);
 			}
 
-			bitmap_entry = idx;
+			bitmap_entry = Some(idx);
 			break;
 		}
 	}
+
+	assert!(
+		matches!(bitmap_entry, Some(_)),
+		"Could not find a usable memory map entry large enough to place \
+		 bitmap!"
+	);
 
 	// consume because we don't need it anymore
 	for (idx, entry) in mmap_usable.enumerate() {
 		let mut size = entry.size();
 		let mut addr = entry.start_address();
 
-		if idx == bitmap_entry {
+		if idx == bitmap_entry.unwrap() {
 			size -= bitmap_size as u64;
 			addr += bitmap_size as u64;
 		}
@@ -143,7 +149,7 @@ pub fn init() {
 
 unsafe impl GlobalAlloc for Pmm {
 	unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
-		let pages = polyfill::div_up(layout.size(), PAGE_SIZE);
+		let pages = util::div_up(layout.size(), PAGE_SIZE);
 		let mut contiguous = 0;
 
 		for offset in self.get_last_used_page()..self.get_highest_bit() {
@@ -170,7 +176,7 @@ unsafe impl GlobalAlloc for Pmm {
 	}
 
 	unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
-		let pages = polyfill::div_up(layout.size(), PAGE_SIZE);
+		let pages = util::div_up(layout.size(), PAGE_SIZE);
 		for page in 0..pages {
 			self.bitmap_reset_bit((ptr as usize + page) / PAGE_SIZE)
 		}

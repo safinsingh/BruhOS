@@ -4,6 +4,9 @@
 #![feature(const_panic)]
 #![feature(panic_info_message)]
 #![feature(panic_internals)]
+#![feature(once_cell)]
+#![feature(const_option)]
+#![feature(const_raw_ptr_deref)]
 #![deny(missing_docs)]
 #![warn(clippy::all)]
 #![warn(clippy::pedantic)]
@@ -15,8 +18,8 @@
 mod arch;
 mod boot;
 mod mm;
-mod polyfill;
 mod stdio;
+mod util;
 
 use arch::cpu;
 use boot::STIVALE_STRUCT;
@@ -26,7 +29,7 @@ use stdio::framebuffer::{CommonColors, STDIO_WRITER};
 
 /// Bootloader entrypoint (kernel main)
 #[no_mangle]
-pub fn kmain(stivale_struct_ptr: usize) -> ! {
+pub extern "C" fn kmain(stivale_struct_ptr: usize) -> ! {
 	// SAFETY:
 	// 1. kmain lifetime is that of the entire program, so assigning an unsafe
 	// cell to a pointer to one of its stack values is okay
@@ -49,7 +52,7 @@ pub fn kmain(stivale_struct_ptr: usize) -> ! {
 
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
-	let mut writer = STDIO_WRITER.lock();
+	let writer = unsafe { STDIO_WRITER.lock().0 .0.get().as_mut().unwrap() };
 	writer.fg.set(CommonColors::White);
 	writer.bg.set(CommonColors::Black);
 
