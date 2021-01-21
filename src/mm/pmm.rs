@@ -94,23 +94,17 @@ pub fn init() {
 		.iter()
 		.filter(|e| matches!(e.entry_type(), MemoryMapEntryType::Usable));
 
-	let highest_page = polyfill::div_up(
-		mmap_usable
-			.clone()
-			.fold(0, |acc, cur| cur.end_address().max(acc)) as usize,
-		super::PAGE_SIZE,
-	);
+	let highest_page = mmap_usable
+		.clone()
+		.fold(0, |acc, cur| cur.end_address().max(acc)) as usize;
+	kiprintln!("Addressing: {} MiB of memory", highest_page / 1024 / 1024);
 
-	// highest page / page size / 8 bits per byte
+	let highest_bit = polyfill::div_up(highest_page, super::PAGE_SIZE);
+	let bitmap_size = highest_bit / 8;
+
 	unsafe {
-		PMM.set_highest_bit(highest_page);
+		PMM.set_highest_bit(highest_bit);
 	}
-
-	let bitmap_size = highest_page / 8;
-	kiprintln!(
-		"Addressing: {} MiB of memory",
-		(highest_page * 4096) / 1024 / 1024
-	);
 
 	let mut bitmap_entry = 0;
 	for (idx, entry) in mmap_usable.clone().enumerate() {
