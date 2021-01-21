@@ -36,7 +36,6 @@ pub fn kmain(stivale_struct_ptr: usize) -> ! {
 		STIVALE_STRUCT.set(stivale::load(stivale_struct_ptr));
 	}
 
-	boot::info();
 	pmm::init();
 	pmm::sanity_check();
 
@@ -50,8 +49,9 @@ pub fn kmain(stivale_struct_ptr: usize) -> ! {
 
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
-	STDIO_WRITER.lock().fg.set(CommonColors::White);
-	STDIO_WRITER.lock().bg.set(CommonColors::Black);
+	let mut writer = STDIO_WRITER.lock();
+	writer.fg.set(CommonColors::White);
+	writer.bg.set(CommonColors::Black);
 
 	static DEFAULT_LOCATION: Location =
 		Location::internal_constructor("UNKNOWN", 0, 0);

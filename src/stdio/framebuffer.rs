@@ -129,28 +129,22 @@ impl FramebufferWriter {
 				}
 
 				if self.row == self.height {
-					self.row -= 1;
+					let top_row_bytes =
+						self.pitch as usize * FONT_DIMENSIONS.1 as usize;
 
-					for y in 0..FONT_DIMENSIONS.1 {
-						for x in 0..self.pitch {
-							let ptr = (self.ptr
-								+ (self.pitch as usize * y as usize)
-								+ (x as usize)) as *mut u32;
-							unsafe { *ptr = 0 }
-						}
+					for offset in 0..top_row_bytes {
+						unsafe { *(self.ptr as *mut u8).add(offset) = 0 }
 					}
 
 					unsafe {
 						polyfill::memmove(
 							self.ptr as *mut u8,
-							(self.ptr
-								+ ((FONT_DIMENSIONS.1 as usize)
-									* self.pitch as usize) as usize) as *mut u8,
-							self.size
-								- (self.pitch as usize
-									* FONT_DIMENSIONS.1 as usize) as usize,
+							(self.ptr + top_row_bytes) as *const u8,
+							self.size - top_row_bytes,
 						);
 					}
+
+					self.row -= 1;
 				}
 			}
 		}
@@ -186,7 +180,8 @@ macro_rules! kprint {
 		use core::fmt::Write;
 		use crate::stdio::framebuffer::STDIO_WRITER;
 
-		let _ = STDIO_WRITER.lock().write_fmt(format_args!($($arg)+));
+		let mut writer = STDIO_WRITER.lock();
+		let _ = writer.write_fmt(format_args!($($arg)+));
 	});
 }
 

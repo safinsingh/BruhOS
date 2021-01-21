@@ -1,4 +1,3 @@
-use crate::kiprintln;
 use core::cell::UnsafeCell;
 use stivale::{HeaderFramebufferTag, StivaleHeader, StivaleStructure};
 
@@ -36,17 +35,3 @@ impl StivaleInfo {
 }
 
 pub static STIVALE_STRUCT: StivaleInfo = StivaleInfo(UnsafeCell::new(None));
-
-pub fn info() {
-	kiprintln!(
-		"Detected bootloader: {} @ {}",
-		STIVALE_STRUCT
-			.inner()
-			.bootloader_brand()
-			.unwrap_or("UNKNOWN"),
-		STIVALE_STRUCT
-			.inner()
-			.bootloader_version()
-			.unwrap_or("UNKNOWN"),
-	);
-}

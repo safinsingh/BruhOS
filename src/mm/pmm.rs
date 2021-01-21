@@ -26,34 +26,34 @@ impl Pmm {
 		})))
 	}
 
-	#[inline]
+	#[inline(always)]
 	unsafe fn set_bitmap_ptr(&self, to: usize) {
 		self.0.get().as_ref().unwrap().lock().bitmap_ptr = Some(to);
 	}
 
-	#[inline]
+	#[inline(always)]
 	unsafe fn set_highest_bit(&self, to: usize) {
 		self.0.get().as_ref().unwrap().lock().highest_bit = Some(to);
 	}
 
-	#[inline]
+	#[inline(always)]
 	unsafe fn set_last_used_page(&self, to: usize) {
 		self.0.get().as_ref().unwrap().lock().last_used_page = to;
 	}
 
-	#[inline]
+	#[inline(always)]
 	fn get_bitmap_ptr(&self) -> *mut u8 {
 		unsafe {
 			self.0.get().as_ref().unwrap().lock().bitmap_ptr.unwrap() as *mut u8
 		}
 	}
 
-	#[inline]
+	#[inline(always)]
 	fn get_highest_bit(&self) -> usize {
 		unsafe { self.0.get().as_ref().unwrap().lock().highest_bit.unwrap() }
 	}
 
-	#[inline]
+	#[inline(always)]
 	fn get_last_used_page(&self) -> usize {
 		unsafe { self.0.get().as_ref().unwrap().lock().last_used_page }
 	}
@@ -94,27 +94,23 @@ pub fn init() {
 		.iter()
 		.filter(|e| matches!(e.entry_type(), MemoryMapEntryType::Usable));
 
-	let mut top_page = 0;
-	for entry in mmap_usable.clone() {
-		ksprintln!(
-			"Found usable memory map entry!\n\tstart_addr: {:#p}\n\tsize: {} \
-			 MiB",
-			entry.start_address() as *mut u8,
-			entry.size() / 1024 / 1024
-		);
-
-		if entry.end_address() > top_page {
-			top_page = entry.end_address();
-		}
-	}
+	let highest_page = polyfill::div_up(
+		mmap_usable
+			.clone()
+			.fold(0, |acc, cur| cur.end_address().max(acc)) as usize,
+		super::PAGE_SIZE,
+	);
 
 	// highest page / page size / 8 bits per byte
-	let bitmap_bits = polyfill::div_up(top_page as usize, super::PAGE_SIZE);
 	unsafe {
-		PMM.set_highest_bit(bitmap_bits);
+		PMM.set_highest_bit(highest_page);
 	}
-	let bitmap_size = bitmap_bits / 8;
-	kiprintln!("PMM bitmap size: {} KiB", bitmap_size / 1024);
+
+	let bitmap_size = highest_page / 8;
+	kiprintln!(
+		"Addressing: {} MiB of memory",
+		(highest_page * 4096) / 1024 / 1024
+	);
 
 	let mut bitmap_entry = 0;
 	for (idx, entry) in mmap_usable.clone().enumerate() {
@@ -124,11 +120,6 @@ pub fn init() {
 				polyfill::memset(PMM.get_bitmap_ptr(), 0xFF, bitmap_size);
 			}
 
-			// Huge brain moment
-			// <does something big brain>
-			// eh nvm
-
-			ksprintln!("Selected region #{} to place bitmap in!", idx + 1);
 			bitmap_entry = idx;
 			break;
 		}
@@ -136,12 +127,10 @@ pub fn init() {
 
 	// consume because we don't need it anymore
 	for (idx, entry) in mmap_usable.enumerate() {
-		kiprintln!("Marking usable region #{} as free...", idx + 1);
 		let mut size = entry.size();
 		let mut addr = entry.start_address();
 
 		if idx == bitmap_entry {
-			kiprintln!("Omitting bitmap from free address space...");
 			size -= bitmap_size as u64;
 			addr += bitmap_size as u64;
 		}
@@ -151,7 +140,11 @@ pub fn init() {
 		}
 	}
 
-	kiprintln!("Initialized PMM bitmap at: {:#p}", PMM.get_bitmap_ptr());
+	kiprintln!(
+		"Initialized {} KiB PMM bitmap at: {:p}",
+		bitmap_size / 1024,
+		PMM.get_bitmap_ptr()
+	);
 }
 
 unsafe impl GlobalAlloc for Pmm {
@@ -179,7 +172,7 @@ unsafe impl GlobalAlloc for Pmm {
 		}
 
 		// oom i think? until paging is set up i guess
-		panic!("PMM: OOM!");
+		panic!("PMM: um");
 	}
 
 	unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
@@ -206,7 +199,7 @@ pub fn sanity_check() {
 
 	assert!(
 		PMM.bitmap_test_bit(ptr_to_int as usize / PAGE_SIZE),
-		"Allocator failed to allocate u8! Allocated at: {:#p}",
+		"Allocator failed to allocate test u8 correctly! Allocated at: {:#p}",
 		ptr_to_int
 	);
 
@@ -216,7 +209,7 @@ pub fn sanity_check() {
 
 	assert!(
 		!PMM.bitmap_test_bit(ptr_to_int as usize / PAGE_SIZE),
-		"Allocator failed to deallocate u8! Exists at: {:#p}",
+		"Allocator failed to deallocate test u8! Still exists at: {:#p}",
 		ptr_to_int
 	);
 
