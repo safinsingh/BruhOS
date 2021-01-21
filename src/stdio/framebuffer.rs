@@ -3,8 +3,8 @@ use crate::STIVALE_STRUCT;
 use core::{
 	cell::UnsafeCell,
 	fmt::{self, Write},
-	lazy::Lazy,
 };
+use lazy_static::lazy_static;
 use spin::Mutex;
 use stivale::framebuffer::FramebufferTag;
 
@@ -209,8 +209,10 @@ impl Write for FramebufferWriter {
 	}
 }
 
-pub static STDIO_WRITER: Mutex<Lazy<FramebufferWriter>> =
-	Mutex::new(Lazy::new(|| FramebufferWriter::new()));
+lazy_static! {
+	pub static ref STDIO_WRITER: Mutex<FramebufferWriter> =
+		Mutex::new(FramebufferWriter::new());
+}
 
 /// Render formatted text to the framebuffer
 #[macro_export]
@@ -246,7 +248,7 @@ macro_rules! kprintln {
 macro_rules! kiprintln {
 	($($arg:tt)+) => ({
 		let writer = unsafe {
-			(**$crate::STDIO_WRITER.lock())
+			$crate::STDIO_WRITER.lock()
 				.0
 				.0
 				.get()
@@ -269,7 +271,7 @@ macro_rules! kiprintln {
 macro_rules! keprintln {
 	($($arg:tt)+) => ({
 		let writer = unsafe {
-			(**$crate::STDIO_WRITER.lock())
+			$crate::STDIO_WRITER.lock()
 				.0
 				.0
 				.get()
@@ -292,7 +294,7 @@ macro_rules! keprintln {
 macro_rules! ksprintln {
 	($($arg:tt)+) => ({
 		let writer = unsafe {
-			(**$crate::STDIO_WRITER.lock())
+			$crate::STDIO_WRITER.lock()
 				.0
 				.0
 				.get()
