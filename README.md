@@ -5,6 +5,8 @@ a basic x86_64 kernel in the works.
 ## cool stuff
 - written in rust
 - boots with any stivale2-compliant bootloader
+- framebuffer bitmap font renderer
+- pmm (bitmap allocator)
 
 ## deps
 
