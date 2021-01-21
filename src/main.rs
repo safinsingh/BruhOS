@@ -25,7 +25,7 @@ use arch::cpu;
 use boot::STIVALE_STRUCT;
 use core::panic::{Location, PanicInfo};
 use mm::pmm;
-use stdio::framebuffer::{CommonColors, STDIO_WRITER};
+use stdio::framebuffer::CommonColors;
 
 /// Bootloader entrypoint (kernel main)
 #[no_mangle]
@@ -52,10 +52,6 @@ pub extern "C" fn kmain(stivale_struct_ptr: usize) -> ! {
 
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
-	let writer = unsafe { STDIO_WRITER.lock().0 .0.get().as_mut().unwrap() };
-	writer.fg.set(CommonColors::White);
-	writer.bg.set(CommonColors::Black);
-
 	static DEFAULT_LOCATION: Location =
 		Location::internal_constructor("UNKNOWN", 0, 0);
 	let location = info.location().unwrap_or(&DEFAULT_LOCATION);
