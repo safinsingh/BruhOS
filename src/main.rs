@@ -25,7 +25,7 @@ use arch::cpu;
 use boot::STIVALE_STRUCT;
 use core::panic::{Location, PanicInfo};
 use mm::pmm;
-use stdio::framebuffer::CommonColors;
+use stdio::framebuffer::{CommonColors, STDIO_WRITER};
 
 /// Bootloader entrypoint (kernel main)
 #[no_mangle]
@@ -38,6 +38,8 @@ pub extern "C" fn kmain(stivale_struct_ptr: usize) -> ! {
 	unsafe {
 		STIVALE_STRUCT.set(stivale::load(stivale_struct_ptr));
 	}
+
+	STDIO_WRITER.inner().init();
 
 	pmm::init();
 	pmm::sanity_check();
