@@ -1,3 +1,4 @@
+use crate::kmain;
 use core::cell::UnsafeCell;
 use stivale::{HeaderFramebufferTag, StivaleHeader, StivaleStructure};
 
@@ -5,7 +6,8 @@ use stivale::{HeaderFramebufferTag, StivaleHeader, StivaleStructure};
 #[used]
 pub static STIVALE_HDR: StivaleHeader =
 	StivaleHeader::new(STACK[0] as *const u8)
-		.tags((&FRAMEBUFFER_TAG as *const HeaderFramebufferTag).cast());
+		.tags((&FRAMEBUFFER_TAG as *const HeaderFramebufferTag).cast())
+		.entry_point(kmain);
 
 static STACK: [u8; 4096] = [0; 4096];
 static FRAMEBUFFER_TAG: HeaderFramebufferTag =

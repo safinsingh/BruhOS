@@ -8,10 +8,6 @@ version = "0.1.0"
 spin = "0.7.1"
 bitflags = "1.2.1"
 
-[dependencies.lazy_static]
-features = ["spin_no_std"]
-version = "1.4.0"
-
 [dependencies.linux_console_font]
 git = "https://github.com/safinsingh/linux_console_font"
 

@@ -11,32 +11,16 @@ name = "bruh_os"
 version = "0.1.0"
 dependencies = [
  "bitflags",
- "lazy_static",
  "linux_console_font",
- "spin 0.7.1",
+ "spin",
  "stivale",
  "zap_font",
-]
-
-[[package]]
-name = "lazy_static"
-version = "1.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e2abad23fbc42b3700f2f279844dc832adb2b2eb069b2df918f455c4e18cc646"
-dependencies = [
- "spin 0.5.2",
 ]
 
 [[package]]
 name = "linux_console_font"
 version = "0.1.0"
 source = "git+https://github.com/safinsingh/linux_console_font#92ef7f8e64c81610c4046a9d3997dea5c78c798d"
-
-[[package]]
-name = "spin"
-version = "0.5.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6e63cff320ae2c57904679ba7cb63280a3dc4613885beafb148ee7bf9aa9042d"
 
 [[package]]
 name = "spin"
@@ -47,7 +31,7 @@ checksum = "13287b4da9d1207a4f4929ac390916d64eacfe236a487e9a9f5b3be392be5162"
 [[package]]
 name = "stivale"
 version = "0.2.1"
-source = "git+https://github.com/safinsingh/stivale-rs#067abd14fecc955bc4ab5f36368a9b54ec71f20a"
+source = "git+https://github.com/safinsingh/stivale-rs#82b781618ebbfa7a0ea2bb3549fc1f037a5a2f5c"
 dependencies = [
  "bitflags",
 ]

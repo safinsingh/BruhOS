@@ -1,13 +1,141 @@
-use crate::{polyfill, STIVALE_STRUCT};
-use core::fmt::{self, Write};
-use lazy_static::lazy_static;
+use super::{BPP, HEIGHT, WIDTH};
+use crate::STIVALE_STRUCT;
+use core::{
+	cell::UnsafeCell,
+	fmt::{self, Write},
+};
 use spin::Mutex;
-use stivale::framebuffer::FramebufferTag;
 
 #[cfg(FONT = "LINUX")]
 use linux_console_font::{FONT, FONT_DIMENSIONS};
 #[cfg(FONT = "ZAP")]
 use zap_font::{FONT, FONT_DIMENSIONS};
+
+pub struct FramebufferWriter {
+	ptr: Option<usize>,
+	pitch: Option<u16>,
+	height: Option<u16>,
+	size: Option<usize>,
+	bpp: Option<u16>,
+	row: u16,
+	col: u16,
+	pub fg: Option<Pixel>,
+	pub bg: Option<Pixel>,
+	buf: [u8; (WIDTH as usize * HEIGHT as usize * BPP as usize / 8)],
+}
+
+impl FramebufferWriter {
+	pub const fn new() -> Self {
+		Self {
+			ptr: None,
+			pitch: None,
+			height: None,
+			bpp: None,
+			size: None,
+			row: 0,
+			col: 0,
+			fg: None,
+			bg: None,
+			buf: [0; (WIDTH as usize * HEIGHT as usize * BPP as usize / 8)],
+		}
+	}
+
+	pub fn init(&mut self) {
+		let fb = STIVALE_STRUCT
+			.inner()
+			.framebuffer()
+			.expect("Framebuffer tag is empty!");
+
+		self.ptr = Some(fb.start_address());
+		self.pitch = Some(fb.pitch());
+		self.height = Some(fb.height());
+		self.bpp = Some(fb.bpp());
+		self.size = Some(fb.size());
+		self.fg = Some(Default::default());
+		self.bg = Some(Default::default());
+	}
+
+	pub fn draw(&mut self, c: char) {
+		match c {
+			'\r' => {
+				self.col = 0;
+			}
+			'\n' => {
+				self.row += FONT_DIMENSIONS.1 as u16;
+			}
+			'\t' => {
+				for _ in 0..12 {
+					self.draw(' ');
+				}
+			}
+			_ => {
+				let offset = (c as u8 - 32) as usize * 16;
+				for y in 0..16 {
+					for x in 0..8 {
+						let cur_x = self.col as usize + (8 - x);
+						let cur_y = self.row as usize + y;
+
+						let base_offset =
+							(cur_x * (self.bpp.unwrap() / 8) as usize
+								+ cur_y * self.pitch.unwrap() as usize) as usize;
+
+						if FONT[y + offset as usize] >> x & 1 == 1 {
+							for byte in 0..4 {
+								self.buf[base_offset + byte] =
+									(self.fg.unwrap().as_bits() >> byte * 8)
+										as u8 & 0xFF
+							}
+						} else {
+							for byte in 0..4 {
+								self.buf[base_offset + byte] =
+									(self.bg.unwrap().as_bits() >> byte * 8)
+										as u8 & 0xFF
+							}
+						}
+					}
+				}
+
+				if self.pitch.unwrap() == self.col {
+					self.draw('\n');
+					return;
+				} else {
+					self.col += FONT_DIMENSIONS.0 as u16;
+				}
+
+				if self.row == self.height.unwrap() {
+					let top_row_bytes = self.pitch.unwrap() as usize
+						* FONT_DIMENSIONS.1 as usize;
+
+					for offset in 0..top_row_bytes {
+						unsafe {
+							*(self.ptr.unwrap() as *mut u8).add(offset) = 0
+						}
+					}
+
+					unsafe {
+						core::ptr::copy(
+							self.ptr.unwrap() as *mut u8,
+							(self.ptr.unwrap() + top_row_bytes) as *mut u8,
+							self.size.unwrap() - top_row_bytes,
+						);
+					}
+
+					self.row -= 1;
+				}
+			}
+		}
+	}
+
+	pub fn flush(&self) {
+		unsafe {
+			core::ptr::copy(
+				&self.buf as *const _ as *mut _,
+				self.ptr.unwrap() as *mut u8,
+				self.size.unwrap(),
+			);
+		}
+	}
+}
 
 pub enum CommonColors {
 	Red,
@@ -29,6 +157,7 @@ impl From<CommonColors> for Pixel {
 	}
 }
 
+#[derive(Default, Copy, Clone)]
 pub struct Pixel {
 	r: u8,
 	g: u8,
@@ -50,105 +179,6 @@ impl Pixel {
 		self.g = to.g;
 		self.b = to.b;
 	}
-
-	pub fn reset(&mut self) {
-		self.r = 255;
-		self.g = 255;
-		self.b = 255;
-	}
-}
-
-impl Default for Pixel {
-	fn default() -> Self {
-		Self { r: 0, g: 0, b: 0 }
-	}
-}
-
-pub struct FramebufferWriter {
-	ptr: usize,
-	pitch: u16,
-	height: u16,
-	size: usize,
-	bpp: u16,
-	row: u16,
-	col: u16,
-	pub fg: Pixel,
-	pub bg: Pixel,
-}
-
-impl FramebufferWriter {
-	pub fn new(tag: &FramebufferTag) -> Self {
-		Self {
-			ptr: tag.start_address(),
-			pitch: tag.pitch(),
-			height: tag.height(),
-			bpp: tag.bpp(),
-			size: tag.size(),
-			row: 0,
-			col: 0,
-			fg: Default::default(),
-			bg: Default::default(),
-		}
-	}
-
-	pub fn draw(&mut self, c: char) {
-		match c {
-			'\n' => {
-				self.row += FONT_DIMENSIONS.1 as u16;
-				self.col = 0;
-			}
-			'\t' => {
-				for _ in 0..12 {
-					self.draw(' ');
-				}
-			}
-			_ => {
-				let offset = (c as u8 - 32) as usize * 16;
-				for y in 0..16 {
-					for x in 0..8 {
-						let cur_x = self.col as usize + (8 - x);
-						let cur_y = self.row as usize + y;
-
-						let ptr = (self.ptr
-							+ (cur_x * (self.bpp / 8) as usize
-								+ cur_y * self.pitch as usize) as usize)
-							as *mut u32;
-
-						if FONT[y + offset as usize] >> x & 1 == 1 {
-							unsafe { *ptr = self.fg.as_bits() }
-						} else {
-							unsafe { *ptr = self.bg.as_bits() }
-						}
-					}
-				}
-
-				if self.pitch == self.col {
-					self.draw('\n');
-				} else {
-					self.col += FONT_DIMENSIONS.0 as u16;
-				}
-
-				if self.row == self.height {
-					let top_row_bytes =
-						self.pitch as usize * FONT_DIMENSIONS.1 as usize;
-
-					for offset in 0..top_row_bytes {
-						unsafe { *(self.ptr as *mut u8).add(offset) = 0 }
-					}
-
-					unsafe {
-						polyfill::memmove(
-							self.ptr as *mut u8,
-							(self.ptr + top_row_bytes) as *const u8,
-							self.size - top_row_bytes,
-						);
-					}
-
-					self.row -= 1;
-				}
-			}
-		}
-	}
 }
 
 impl Write for FramebufferWriter {
@@ -163,25 +193,30 @@ impl Write for FramebufferWriter {
 	}
 }
 
-lazy_static! {
-	pub static ref STDIO_WRITER: Mutex<FramebufferWriter> =
-		Mutex::new(FramebufferWriter::new(
-			STIVALE_STRUCT
-				.inner()
-				.framebuffer()
-				.expect("Framebuffer tag is empty!")
-		));
+pub struct FramebufferWriterWrapper(UnsafeCell<Mutex<FramebufferWriter>>);
+unsafe impl Send for FramebufferWriterWrapper {}
+unsafe impl Sync for FramebufferWriterWrapper {}
+
+impl FramebufferWriterWrapper {
+	pub fn inner(&self) -> &mut FramebufferWriter {
+		unsafe { self.0.get().as_mut().unwrap().get_mut() }
+	}
 }
+
+pub static STDIO_WRITER: FramebufferWriterWrapper = FramebufferWriterWrapper(
+	UnsafeCell::new(Mutex::new(FramebufferWriter::new())),
+);
 
 /// Render formatted text to the framebuffer
 #[macro_export]
 macro_rules! kprint {
 	($($arg:tt)+) => ({
 		use core::fmt::Write;
-		use crate::stdio::framebuffer::STDIO_WRITER;
+		use $crate::stdio::framebuffer::STDIO_WRITER;
 
-		let mut writer = STDIO_WRITER.lock();
+		let writer = STDIO_WRITER.inner();
 		let _ = writer.write_fmt(format_args!($($arg)+));
+		writer.flush();
 	});
 }
 
@@ -189,11 +224,11 @@ macro_rules! kprint {
 #[macro_export]
 macro_rules! kprintln {
 	() => ({
-		$crate::kprint!("\n");
+		$crate::kprint!("\r\n");
 	});
 	($($arg:tt)+) => ({
 		$crate::kprint!($($arg)+);
-		$crate::kprint!("\n");
+		$crate::kprint!("\r\n");
 	});
 }
 
@@ -202,9 +237,12 @@ macro_rules! kprintln {
 #[macro_export]
 macro_rules! kiprintln {
 	($($arg:tt)+) => ({
-		$crate::STDIO_WRITER.lock().fg.set($crate::CommonColors::Cyan);
+		use $crate::stdio::framebuffer::STDIO_WRITER;
+		let writer = STDIO_WRITER.inner();
+
+		writer.fg.unwrap().set($crate::CommonColors::Cyan);
 		$crate::kprint!("[ info ] => ");
-		$crate::STDIO_WRITER.lock().fg.reset();
+		writer.fg.unwrap().set($crate::CommonColors::White);
 
 		$crate::kprint!($($arg)+);
 		$crate::kprintln!();
@@ -216,9 +254,12 @@ macro_rules! kiprintln {
 #[macro_export]
 macro_rules! keprintln {
 	($($arg:tt)+) => ({
-		$crate::STDIO_WRITER.lock().fg.set($crate::CommonColors::Red);
+		use $crate::stdio::framebuffer::STDIO_WRITER;
+		let writer = STDIO_WRITER.inner();
+
+		writer.fg.unwrap().set($crate::CommonColors::Red);
 		$crate::kprint!("[ fail ] => ");
-		$crate::STDIO_WRITER.lock().fg.reset();
+		writer.fg.unwrap().set($crate::CommonColors::White);
 
 		$crate::kprint!($($arg)+);
 		$crate::kprintln!();
@@ -230,9 +271,12 @@ macro_rules! keprintln {
 #[macro_export]
 macro_rules! ksprintln {
 	($($arg:tt)+) => ({
-		$crate::STDIO_WRITER.lock().fg.set($crate::CommonColors::Green);
+		use $crate::stdio::framebuffer::STDIO_WRITER;
+		let writer = STDIO_WRITER.inner();
+
+		writer.fg.unwrap().set($crate::CommonColors::Green);
 		$crate::kprint!("[ scss ] => ");
-		$crate::STDIO_WRITER.lock().fg.reset();
+		writer.fg.unwrap().set($crate::CommonColors::White);
 
 		$crate::kprint!($($arg)+);
 		$crate::kprintln!();

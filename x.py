@@ -7,6 +7,7 @@ from subprocess import call, PIPE, DEVNULL
 
 verbose = False
 release = False
+broken = False
 
 
 def _(command):
@@ -69,9 +70,13 @@ def hdd():
 
 
 def run():
-    _(
-        "qemu-system-x86_64 -m 2G -net none -smp 4 -drive format=raw,file=build/bruhos.img"
-    )
+    command = "qemu-system-x86_64 -m 2G -net none -smp 4 -drive format=raw,file=build/bruhos.img"
+
+    global broken
+    if broken:
+        command += " -gdb tcp::3333 -S"
+
+    _(command)
     sprint("Run is complete!")
 
 
@@ -86,19 +91,20 @@ def all():
 def help():
     print(
         """x.py - BruhOS v0.1
-USAGE: ./x.py [-v/-r] subcommand
+USAGE: ./x.py [-v/-r/-d] subcommand
 
 FLAGS:
-    -v       - run verbosely
-    -r       - build in release mode (if applicable)
+	-v       - run verbosely
+	-r       - build in release mode (if applicable)
+	-d       - run with debugging (lldb)
 
 SUBCOMMANDS:
-    clean    - clean out build files
-    build    - build kernel
-    hdd      - create and write to hard disk
-    run      - emulate with qemu
-    all      - clean, build, and run
-    help     - display this message"""
+	clean    - clean out build files
+	build    - build kernel
+	hdd      - create and write to hard disk
+	run      - emulate with qemu
+	all      - clean, build, and run
+	help     - display this message"""
     )
 
 
@@ -121,6 +127,11 @@ def main():
         global release
         release = True
         sys.argv.remove("-r")
+
+    if "-d" in sys.argv:
+        global broken
+        broken = True
+        sys.argv.remove("-d")
 
     action = sys.argv.pop()
 

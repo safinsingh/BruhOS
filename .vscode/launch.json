@@ -1,0 +1,12 @@
+{
+	"version": "0.2.0",
+	"configurations": [
+		{
+			"type": "lldb",
+			"name": "Debug",
+			"request": "custom",
+			"targetCreateCommands": ["target create ${workspaceFolder}/build/kernel.elf"],
+			"processCreateCommands": ["gdb-remote 127.0.0.1:3333"]
+		}
+	]
+}
